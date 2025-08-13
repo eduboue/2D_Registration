@@ -15,7 +15,7 @@ description = """"
 This is a program that allows a user to register
 time-series image data aquired from confocal or two-photon data.
 
-The function embedded in the program are:
+The functions embedded in the program are:
 
     load_multitiff_image(file_path)
     compute_average_reference(images, num_frames=100)
@@ -24,32 +24,31 @@ The function embedded in the program are:
     apply_registration(img_stack, reg_offsets)
     save_stack(images, save_path)
 
-The general stratagy for register images is to downsamnple the images
-heirarchially (starting a small number and working your way up to 1:1), then
-assessing correlations at each interval. It then assesses the best correaltion
-and uses that best correlation to make a x-displacmeent, y-displacmeent. Sometimes
-jitter can corrupt the registration, so this allows you to both interate
+The general strategy for registering images is to downsample the images
+hierarchically (starting with a small number and working your way up to 1:1), then
+assessing correlations at each interval. It then assesses the best correlation
+and uses that best correlation to make an x-displacement and, y-displacement. Sometimes
+jitter can corrupt the registration, so this allows you to both iterate
 registrations (i.e., allow you to register once, and then re-register the
-registered image, however many times you want). There is also a stratagy
-to smooth the transforamtion matrix before applying - this essentailly
-nessecitates (essentailly because you dont have to, but for functionality
-you should) iterating registerations.
+registered image, however many times you want). There is also a strategy
+to smooth the transformation matrix before applying - this is needed because 
+without smoothing, you will get jitter throughout.
 
-The general workflow would be to laod the tiff, make a average stack,
-view image (both static and time-lapse), generate trasformation matrix and
-funally apply it. You can view your results also to ensure drift has (mostly)
+The general workflow would be to load the TIFF, make an average stack,
+view image (both static and time-lapse), generate a transformation matrix, and
+finally apply it. You can also  view your results to ensure drift has (mostly)
 been corrected for.
 
 Inputs:
     -i, --input, (required=True)                        Sets path to input TIFF file
     -o, --output (required=True)                        Sets path to save registered TIFF file
-    --iterate    (type=int, default=1)                  Sets number of times to iterate the registration process
+    --iterate    (type=int, default=1)                  Sets the number of times to iterate the registration process
     -s, --smooth (type=int, choices=[0, 1], default=1)  Apply smoothing to registration offsets (1=Yes, 0=No)
     --num_frames (type=int, default=100)                Number of frames to use for computing the average reference image (default: 100)")
     --downsample_rates, (type=parse_vector, \
           default=[1/16, 3/32, 1/8, 3/16, 1/4, 1/2, 1]) Downsample rates as a vector, e.g., [1/16, 3/32, 1/8, 3/16, 1/4, 1/2, 1]
     --max_movement (type=float, default=0.5)            Maximum movement for registration (default: 0.5)
-    --save_as_tif (type=int, choices [0,1], default=0)  Allows user to spefic saving output as a tiff without metadata.
+    --save_as_tif (type=int, choices [0,1], default=0)  Allows user to specify saving output as a tiff without metadata. Set to 1 to enable
 
 Output:
     Saves a registered image stack (multitiff) to the output directory
@@ -57,7 +56,7 @@ Output:
 Example:
     python RegistrationScriptFINAL_hd5.py -i /path/to/input.tif -o /path/to/output.tif --iterate 2 -s 1 --num_frames 50 --downsample_rates [1/16,3/32,1/8,3/16,1/4,1/2,1] --max_movement 0.5 --save_as_tif 0
 
-    NOTE: If you are specifying downsample_rates, make sure this is written in brackets ("[]") and that there are no spaces. The code can find the comma and seperate that way.
+    NOTE: If you are specifying downsample_rates, make sure this is written in brackets ("[]") and that there are no spaces. The code can find the comma and separate that way.
 
 Written: Erik R. Duboué, Florida Atlantic University
 www.erikduboue.com
@@ -98,6 +97,7 @@ def save_hdf5_data(images, metadata, output_path):
 
     print(f"Registered images saved as HDF5: {output_path}")
 
+### --- Function to Load TIFF Data ---
 def load_multitiff_image(file_path):
     if not file_path.lower().endswith(('.tif', '.tiff')):
         raise ValueError("File must be a .tif or .tiff format")
@@ -117,6 +117,7 @@ def load_multitiff_image(file_path):
         return None
     raise ValueError
 
+### --- Function to compute a reference brain using stack averaging ---
 def compute_average_reference(images, num_frames=100):
     if images is None:
         print("No valid time-series data loaded. Please check your input file.")
@@ -126,6 +127,7 @@ def compute_average_reference(images, num_frames=100):
     print(f"Computed averaged reference image using the first {num_frames} frames.")
     return avg_image
 
+### --- Function to smooth transformation matrix ---
 def smooth_registration_offsets(reg_offsets, window_length=11, polyorder=3):
     if len(reg_offsets) < window_length:
         print("Warning: Too few frames for smoothing. Returning original offsets.")
@@ -135,6 +137,7 @@ def smooth_registration_offsets(reg_offsets, window_length=11, polyorder=3):
     smoothed_offsets[:, 1] = savgol_filter(reg_offsets[:, 1], window_length, polyorder)
     return smoothed_offsets
 
+### --- Function to register images ---
 def register_images(img_stack, template, downsample_rates, max_movement):
 
     """
@@ -207,6 +210,7 @@ def register_images(img_stack, template, downsample_rates, max_movement):
     print(reg_offsets)
     return reg_offsets
 
+### --- Function to apply transformation matrix to data ---
 def apply_registration(img_stack, reg_offsets):
     depth, height, width = img_stack.shape
     registered_stack = np.zeros_like(img_stack, dtype=np.uint16)
@@ -219,6 +223,7 @@ def apply_registration(img_stack, reg_offsets):
     print("Registration applied to all frames.")
     return registered_stack
 
+### --- Function to Save TIFF Data ---
 def save_stack(images, save_path):
     if images is None:
         print("No image data to save.")
@@ -227,12 +232,14 @@ def save_stack(images, save_path):
     tiff.imwrite(save_path, images, dtype=images.dtype)
     print(f"Saved stack as TIFF: {save_path}")
 
+### --- argparser helper function to extract downsample rates ---
 def parse_vector(arg):
     try:
         return [eval(x) for x in arg.strip('[]').split(',')]
     except Exception:
         raise argparse.ArgumentTypeError("Downsample rates must be a list of numbers, e.g., [1/16, 1/8, 1/4, 1/2, 1]")
 
+### --- Main Function  ---
 def main():
     parser = argparse.ArgumentParser(description="Time-Series Image Registration CLI Tool")
     parser.add_argument("-i", "--input", required=True, help="Path to input HDF5 (.h5, .hd5) or TIFF (.tif) file")
